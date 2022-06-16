@@ -49,6 +49,7 @@ aks-standard-cluster:
 	terraform apply -target=module.aks -var kubeconfig=${KUBECONFIG} --auto-approve
 	@echo "Done creating AKS cluster"
 
+cloud ?= azure
 .PHONY:
 ## add-ns-record: Adds NS record for subdomain under gitpod-selfhosted.com
 add-ns-record: check-env-cloud
@@ -57,6 +58,7 @@ add-ns-record: check-env-cloud
 	terraform apply -target=module.$(cloud)-add-dns-record  -var kubeconfig=${KUBECONFIG} --auto-approve
 	@echo "Done adding NS record"
 
+cloud ?= azure
 .PHONY:
 ## cluster-issuer: Creates a cluster issuer for the correspondign provider
 cluster-issuer: check-env-cloud
