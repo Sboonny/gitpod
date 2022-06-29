@@ -148,7 +148,7 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
     },
     ADD_NS_RECORD: {
         phase: "add-ns-record",
-        makeTarget: `add-ns-record cloud=${cloud}`,
+        makeTarget: "add-ns-record",
         description: "Adds NS record for subdomain under gitpod-self-hosted.com",
     },
     INSTALL_GITPOD_IGNORE_PREFLIGHTS: {
@@ -174,7 +174,7 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
     },
     DESTROY: {
         phase: "destroy",
-        makeTarget: `cleanup cloud=${cloud}`,
+        makeTarget: "cleanup",
         description: "Destroy the created infrastucture",
     },
     RESULTS: {
