@@ -164,9 +164,8 @@ type BlockedRepository struct {
 }
 
 type ProxyConfig struct {
-	StaticIP           string              `json:"staticIP"`
-	ServiceAnnotations map[string]string   `json:"serviceAnnotations"`
-	ServiceType        *corev1.ServiceType `json:"serviceType,omitempty" validate:"omitempty,service_config_type"`
+	StaticIP           string            `json:"staticIP"`
+	ServiceAnnotations map[string]string `json:"serviceAnnotations"`
 }
 
 type PublicAPIConfig struct {
