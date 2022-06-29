@@ -1,13 +1,18 @@
+import * as fs from "fs";
 import { join } from "path";
 import { exec } from "./util/shell";
 import { Werft } from "./util/werft";
 
-const testConfig: string = process.argv.length > 2 ? process.argv[2] : "STANDARD_K3S_TEST";
-// we can provide the version of the gitpod to install (eg: 2022.4.2)
-// "-" is the default value which will install the latest version
-const version: string = process.argv.length > 3 ? process.argv[3] : "-";
+const context: any = JSON.parse(fs.readFileSync("context.json").toString());
 
-const channel: string = process.argv.length > 4 ? process.argv[4] : "unstable";
+const annotations: any = context.Annotations || {};
+
+const testConfig: string = process.argv.length > 2 ? process.argv[2] : "STANDARD_K3S_TEST";
+
+const channel: string = annotations.channel || "unstable";
+const version: string = annotations.version || "-";
+const preview: string = annotations.preview || "false"; // setting to true will not run tests or destroy the setup
+const upgrade: string = annotations.upgrade || "false"; // setting to true will not KOTS upgrade to the latest version. Set the channel to beta or stable in this case.
 
 const makefilePath: string = join("install/tests");
 
@@ -39,25 +44,6 @@ const TEST_CONFIGURATIONS: { [name: string]: TestConfig } = {
             "GENERATE_KOTS_CONFIG",
             "INSTALL_GITPOD",
             "CHECK_INSTALLATION",
-            "RUN_INTEGRATION_TESTS",
-            "RESULTS",
-            "DESTROY",
-        ],
-    },
-    STANDARD_GKE_UPGRADE_TEST: {
-        CLOUD: "gcp",
-        DESCRIPTION: `Deploy Gitpod on GKE, and test upgrade from ${version} to latest version`,
-        PHASES: [
-            "STANDARD_GKE_CLUSTER",
-            "CERT_MANAGER",
-            "CLUSTER_ISSUER",
-            "GCP_MANAGED_DNS",
-            "GENERATE_KOTS_CONFIG",
-            "INSTALL_GITPOD",
-            "CHECK_INSTALLATION",
-            "KOTS_UPGRADE",
-            "CHECK_INSTALLATION",
-            "DESTROY",
         ],
     },
     STANDARD_K3S_TEST: {
@@ -71,23 +57,7 @@ const TEST_CONFIGURATIONS: { [name: string]: TestConfig } = {
             "CLUSTER_ISSUER",
             "GENERATE_KOTS_CONFIG",
             "INSTALL_GITPOD",
-            "RESULTS",
             "CHECK_INSTALLATION",
-            "RUN_INTEGRATION_TESTS",
-            "DESTROY",
-        ],
-    },
-    STANDARD_K3S_PREVIEW: {
-        CLOUD: "gcp",
-        DESCRIPTION: "Create a SH Gitpod preview environment on a K3s cluster, created on a GCP instance",
-        PHASES: [
-            "STANDARD_K3S_CLUSTER_ON_GCP",
-            "CERT_MANAGER",
-            "CLUSTER_ISSUER",
-            "GENERATE_KOTS_CONFIG",
-            "INSTALL_GITPOD",
-            "CHECK_INSTALLATION",
-            "RESULTS",
         ],
     },
     STANDARD_AKS_TEST: {
@@ -101,10 +71,7 @@ const TEST_CONFIGURATIONS: { [name: string]: TestConfig } = {
             "ADD_NS_RECORD",
             "GENERATE_KOTS_CONFIG",
             "INSTALL_GITPOD",
-            "RESULTS",
             "CHECK_INSTALLATION",
-            "RUN_INTEGRATION_TESTS",
-            "DESTROY",
         ],
     },
     STANDARD_EKS_TEST: {
@@ -117,11 +84,8 @@ const TEST_CONFIGURATIONS: { [name: string]: TestConfig } = {
             "CLUSTER_ISSUER",
             "ADD_NS_RECORD",
             "GENERATE_KOTS_CONFIG",
-            "RESULTS",
             "INSTALL_GITPOD",
             "CHECK_INSTALLATION",
-            "RUN_INTEGRATION_TESTS",
-            "DESTROY",
         ],
     },
 };
@@ -174,17 +138,17 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
     },
     CLUSTER_ISSUER: {
         phase: "setup-cluster-issuer",
-        makeTarget: `cluster-issuer cloud=${cloud}`,
-        description: `Deploys ClusterIssuer for ${cloud}`,
+        makeTarget: "cluster-issuer",
+        description: "Deploys ClusterIssuer for ${cloud}",
     },
     EXTERNALDNS: {
         phase: "external-dns",
-        makeTarget: `external-dns cloud=${cloud}`,
+        makeTarget: "external-dns",
         description: `Deploys external-dns with ${cloud} provider`,
     },
     ADD_NS_RECORD: {
         phase: "add-ns-record",
-        makeTarget: `add-ns-record cloud=${cloud}`,
+        makeTarget: "add-ns-record",
         description: "Adds NS record for subdomain under gitpod-self-hosted.com",
     },
     INSTALL_GITPOD_IGNORE_PREFLIGHTS: {
@@ -208,14 +172,9 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
         makeTarget: "kots-upgrade",
         description: "Upgrade Gitpod installation to latest version using KOTS CLI",
     },
-    RUN_INTEGRATION_TESTS: {
-        phase: "run-integration-tests",
-        makeTarget: "run-tests",
-        description: "Runs the existing integration tests on Gitpod",
-    },
     DESTROY: {
         phase: "destroy",
-        makeTarget: `cleanup cloud=${cloud}`,
+        makeTarget: "cleanup",
         description: "Destroy the created infrastucture",
     },
     RESULTS: {
@@ -224,6 +183,16 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
         description: "Get the result of the setup",
     },
 };
+
+
+const TESTS: { [name: string]: InfraConfig } = {
+    // TODO(nvn): make this more atomic
+    INTEGRATION_TESTS: {
+        phase: "run-tests",
+        makeTarget: "run-tests",
+        description: "Run the integration tests",
+    },
+}
 
 if (config === undefined) {
     console.log(`Unknown configuration specified: "${testConfig}", Exiting...`);
@@ -238,21 +207,61 @@ installerTests(TEST_CONFIGURATIONS[testConfig]).catch((err) => {
 
 export async function installerTests(config: TestConfig) {
     console.log(config.DESCRIPTION);
+    // these phases set up the infrastructure
     for (let phase of config.PHASES) {
         const phaseSteps = INFRA_PHASES[phase];
         const ret = callMakeTargets(phaseSteps.phase, phaseSteps.description, phaseSteps.makeTarget);
         if (ret) {
-            // there is not point in continuing if one stage fails
-            // TODO: maybe add failable, phases
+            // there is not point in continuing if one stage fails for infra setup
             break;
+        }
+    }
+
+    if (upgrade && upgrade == "true") {
+        // we could run integration tests in the current setup
+        // but since we run nightly tests on unstable setups, feels unnecessary
+        // runIntegrationTests()
+
+        const upgradePhase = INFRA_PHASES["KOTS_UPGRADE"]
+        const ret = callMakeTargets(upgradePhase.phase, upgradePhase.description, upgradePhase.makeTarget);
+        if (ret) {
+            return
+        }
+    }
+
+    // if the preview flag is set to true, the script will print the result and exits
+    if (preview && preview == "true") {
+        const resultPhase = INFRA_PHASES["RESULTS"]
+
+        // TODO(nvn): send the kubeconfig to cloud storage
+        callMakeTargets(resultPhase.phase, resultPhase.description, resultPhase.makeTarget);
+
+        werft.result("Preview URL", "url", `https://${process.env["TF_VAR_TEST_ID"]}-gitpod-self-hosted.com`)
+    } else {
+        // if we are not doing preview, we run the tests and delete the infrastructure
+        runIntegrationTests()
+
+        cleanup()
+    }
+}
+
+function runIntegrationTests() {
+    for (let test in TESTS) {
+        const testPhase = TESTS[test]
+        // we just let tests fail
+        const ret = callMakeTargets(testPhase.phase, testPhase.description, testPhase.makeTarget);
+        if (ret) {
+            werft.result("Test failed", "test name", testPhase.description)
         }
     }
 }
 
 function callMakeTargets(phase: string, description: string, makeTarget: string) {
     werft.phase(phase, description);
+    werft.log(phase, `Calling ${makeTarget}`);
 
-    const response = exec(`make -C ${makefilePath} ${makeTarget}`, {
+    // exporting cloud env var is important for the make targets
+    const response = exec(`export cloud=${cloud} && make -C ${makefilePath} ${makeTarget}`, {
         slice: phase,
         dontCheckRc: true,
     });
@@ -263,7 +272,8 @@ function callMakeTargets(phase: string, description: string, makeTarget: string)
         return response.code;
     }
 
-    werft.log(phase, response.stdout.toString());
+    werft.log(phase, `Phase succeeded`);
+
     werft.done(phase);
 
     return response.code;
@@ -282,7 +292,7 @@ function cleanup() {
     werft.phase(phase, "Destroying all the created resources");
 
     const response = exec(`make -C ${makefilePath} cleanup cloud=${cloud}`, {
-        slice: "run-terraform-destroy",
+        slice: phase,
         dontCheckRc: true,
     });
 
@@ -308,6 +318,8 @@ function cleanup() {
         console.log(`Cleanup the following resources manually: ${itemsTobeCleaned}`);
 
         werft.fail(phase, "Destroying of resources failed");
+    } else {
+        werft.done(phase)
     }
 
     return response.code;
