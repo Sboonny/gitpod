@@ -208,8 +208,19 @@ check-gitpod-installation: delete-cm-setup check-kots-app check-env-sub-domain
 	@echo "Curling http://${TF_VAR_TEST_ID}.gitpod-self-hosted.com/api/version"
 	curl -i -X GET http://${TF_VAR_TEST_ID}.gitpod-self-hosted.com/api/version || { echo "Curling Gitpod endpoint failed"; exit 1; }
 
+path ?= "."
 run-tests:
-	./tests.sh ${KUBECONFIG}
+	./tests.sh ${KUBECONFIG} ${path}
+
+run-workspace-tests: run-tests path="./test/tests/workspace/"
+run-vscode-ide-tests: run-tests path="./test/tests/ide/vscode/"
+run-jb-ide-tests: run-tests path="./test/tests/ide/jetbrains/"
+run-cs-component-tests: run-tests path="./test/tests/components/content-service/"
+run-db-component-tests: run-tests path="./test/tests/components/database/"
+run-ib-component-tests: run-tests path="./test/tests/components/image-builder/"
+run-server-component-tests: run-tests path="./test/tests/components/content-service/"
+run-wsd-component-tests: run-tests path="./test/tests/components/ws-daemon/"
+run-wsm-component-tests: run-tests path="./test/tests/components/ws-manager/"
 
 kots-upgrade:
 	@echo "Upgrade gitpod KOTS app to latest"
