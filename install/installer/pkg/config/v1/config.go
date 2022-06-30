@@ -7,6 +7,7 @@ package config
 import (
 	"time"
 
+	agentSmith "github.com/gitpod-io/gitpod/agent-smith/pkg/config"
 	"github.com/gitpod-io/gitpod/common-go/util"
 	"github.com/gitpod-io/gitpod/installer/pkg/config"
 	"github.com/gitpod-io/gitpod/installer/pkg/config/v1/experimental"
@@ -96,6 +97,8 @@ type Config struct {
 	ImagePullSecrets []ObjectRef `json:"imagePullSecrets,omitempty"`
 
 	Workspace Workspace `json:"workspace" validate:"required"`
+
+	AgentSmith *agentSmith.Config `json:"agentSmith,omitempty"`
 
 	OpenVSX OpenVSX `json:"openVSX"`
 
