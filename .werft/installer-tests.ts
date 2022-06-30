@@ -13,6 +13,7 @@ const channel: string = annotations.channel || "unstable";
 const version: string = annotations.version || "-";
 const preview: string = annotations.preview || "false"; // setting to true will not run tests or destroy the setup
 const upgrade: string = annotations.upgrade || "false"; // setting to true will not KOTS upgrade to the latest version. Set the channel to beta or stable in this case.
+const runTest: string = annotations.runTest || "true"; // setting to true will not KOTS upgrade to the latest version. Set the channel to beta or stable in this case.
 
 const makefilePath: string = join("install/tests");
 
@@ -139,7 +140,7 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
     CLUSTER_ISSUER: {
         phase: "setup-cluster-issuer",
         makeTarget: "cluster-issuer",
-        description: "Deploys ClusterIssuer for ${cloud}",
+        description: `Deploys ClusterIssuer for ${cloud}`,
     },
     EXTERNALDNS: {
         phase: "external-dns",
@@ -184,54 +185,53 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
     },
 };
 
-
 const TESTS: { [name: string]: InfraConfig } = {
     WORKSPACE_TEST: {
         phase: "run-workspace-tests",
         makeTarget: "run-workspace-tests",
-        description: "Run the test for workspaces",
+        description: "workspaces tests",
     },
     VSCODE_IDE_TEST: {
         phase: "run-vscode-ide-tests",
         makeTarget: "run-vscode-ide-tests",
-        description: "Run the test for vscode IDE",
+        description: "vscode IDE test",
     },
     JB_IDE_TEST: {
         phase: "run-jb-ide-tests",
         makeTarget: "run-jb-ide-tests",
-        description: "Run the test for jetbrains IDE",
+        description: "jetbrains IDE tests",
     },
     CONTENTSERVICE_TEST: {
         phase: "run-cs-component-tests",
         makeTarget: "run-cs-component-tests",
-        description: "Run the test for content-service component",
+        description: "content-service tests",
     },
     DB_TEST: {
         phase: "run-db-component-tests",
         makeTarget: "run-db-component-tests",
-        description: "Run the test for database component",
+        description: "database tests",
     },
     IMAGEBUILDER_TEST: {
         phase: "run-ib-component-tests",
         makeTarget: "run-ib-component-tests",
-        description: "Run the test for image-builder component",
+        description: "image-builder tests",
     },
     SERVER_TEST: {
         phase: "run-server-component-tests",
         makeTarget: "run-server-component-tests",
-        description: "Run the test for server component",
+        description: "server tests",
     },
     WS_DAEMON_TEST: {
         phase: "run-wsd-component-tests",
         makeTarget: "run-wsd-component-tests",
-        description: "Run the test for ws-daemon component",
+        description: "ws-daemon tests",
     },
     WS_MNGR_TEST: {
         phase: "run-wsm-component-tests",
         makeTarget: "run-wsm-component-tests",
-        description: "Run the test for ws-manager component",
+        description: "ws-manager tests",
     },
-}
+};
 
 if (config === undefined) {
     console.log(`Unknown configuration specified: "${testConfig}", Exiting...`);
@@ -247,56 +247,74 @@ installerTests(TEST_CONFIGURATIONS[testConfig]).catch((err) => {
 export async function installerTests(config: TestConfig) {
     console.log(config.DESCRIPTION);
     // these phases set up the infrastructure
+    werft.phase(`create-${cloud}-infra`, `Create the infrastructure in ${cloud}`);
     for (let phase of config.PHASES) {
         const phaseSteps = INFRA_PHASES[phase];
         const ret = callMakeTargets(phaseSteps.phase, phaseSteps.description, phaseSteps.makeTarget);
         if (ret) {
             // there is not point in continuing if one stage fails for infra setup
+            werft.fail(`create-${cloud}-infra`, "Cluster creation failed");
             break;
         }
     }
+    werft.done(`create-${cloud}-infra`);
 
     if (upgrade && upgrade == "true") {
         // we could run integration tests in the current setup
         // but since we run nightly tests on unstable setups, feels unnecessary
         // runIntegrationTests()
 
-        const upgradePhase = INFRA_PHASES["KOTS_UPGRADE"]
+        const upgradePhase = INFRA_PHASES["KOTS_UPGRADE"];
         const ret = callMakeTargets(upgradePhase.phase, upgradePhase.description, upgradePhase.makeTarget);
         if (ret) {
-            return
+            return;
         }
+    }
+
+    if (runTest == undefined || runTest == "false") {
+        console.log("Skipping integration tests");
+    } else {
+        runIntegrationTests();
     }
 
     // if the preview flag is set to true, the script will print the result and exits
     if (preview && preview == "true") {
-        const resultPhase = INFRA_PHASES["RESULTS"]
+        const resultPhase = INFRA_PHASES["RESULTS"];
+        werft.phase("print-output", "Get connection details to self-hosted setup");
 
         // TODO(nvn): send the kubeconfig to cloud storage
         callMakeTargets(resultPhase.phase, resultPhase.description, resultPhase.makeTarget);
 
-        werft.result("Preview URL", "url", `https://${process.env["TF_VAR_TEST_ID"]}-gitpod-self-hosted.com`)
-    } else {
-        // if we are not doing preview, we run the tests and delete the infrastructure
-        runIntegrationTests()
+        exec(
+            `werft log result -d  "self-hosted preview url" url "https://${process.env["TF_VAR_TEST_ID"]}.gitpod-self-hosted.com"`,
+        );
 
-        cleanup()
+        exec(`werft log result -d  "Terraform state" "Terraform state file name is ${process.env["TF_VAR_TEST_ID"]}"`);
+
+        werft.done("print-output");
+    } else {
+        // if we are not doing preview, we delete the infrastructure
+        cleanup();
     }
 }
 
 function runIntegrationTests() {
+    werft.phase("run-integration-tests", "Run all existing integration tests");
     for (let test in TESTS) {
-        const testPhase = TESTS[test]
+        const testPhase = TESTS[test];
         // we just let tests fail
         const ret = callMakeTargets(testPhase.phase, testPhase.description, testPhase.makeTarget);
         if (ret) {
-            werft.result("Test failed", "test name", testPhase.description)
+            exec(
+                `werft log result -d "failed test" "${testPhase.description}(Phase ${testPhase.phase}) failed. Please refer logs."`,
+            );
         }
     }
+
+    werft.done("run-integration-tests");
 }
 
-function callMakeTargets(phase: string, description: string, makeTarget: string) {
-    werft.phase(phase, description);
+function callMakeTargets(phase: string, description: string, makeTarget: string, failable: boolean = false) {
     werft.log(phase, `Calling ${makeTarget}`);
 
     // exporting cloud env var is important for the make targets
@@ -307,16 +325,18 @@ function callMakeTargets(phase: string, description: string, makeTarget: string)
 
     if (response.code) {
         console.error(`Error: ${response.stderr}`);
-        werft.fail(phase, "Operation failed");
-        return response.code;
+
+        if (failable) {
+            werft.fail(phase, "Operation failed");
+            return response.code;
+        }
+        werft.log(phase, `Phase failed`);
+    } else {
+        werft.log(phase, `Phase succeeded`);
+        werft.done(phase);
     }
 
-    werft.log(phase, `Phase succeeded`);
-
-    werft.done(phase);
-
     return response.code;
-
 }
 
 function randomize(resource: string, platform: string): string {
@@ -358,7 +378,7 @@ function cleanup() {
 
         werft.fail(phase, "Destroying of resources failed");
     } else {
-        werft.done(phase)
+        werft.done(phase);
     }
 
     return response.code;

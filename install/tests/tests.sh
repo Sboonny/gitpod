@@ -12,15 +12,15 @@ echo "Starting test on ${DATE} for ${TESTPATH}"
 
 cd "${TESTPATH}" ||  echo "Path invalid ${TESTPATH}"
 
-# go test -v ./... "-kubeconfig=$1" -namespace=gitpod -username=gitpod-integration-test 2>&0 -coverprofile=coverage.out
-ls -la
+go test -v ./... "-kubeconfig=$1" -namespace=gitpod -username=gitpod-integration-test 2>&0 -coverprofile=coverage.out
 
 TEST_STATUS=$?
-echo ${TEST_STATUS}
+cd "${CURRENT}" || echo "Couldn't move back to test dir"
+
 if [ "$TEST_STATUS" -ne "0" ]; then
     echo "Test failed for ${TESTPATH} at ${DATE}"
+    exit 1
 else
     echo "Test succeeded for ${TESTPATH} at ${DATE}"
+    exit 0
 fi;
-
-cd "${CURRENT}" || echo "Couldn't move back to test dir"

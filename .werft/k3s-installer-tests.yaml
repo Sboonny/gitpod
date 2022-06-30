@@ -1,21 +1,4 @@
 # debug using `werft run github -f -s .werft/installer-tests.ts -j .werft/k3s-installer-tests.yaml -a debug=true`
-args:
-- name: preview
-  desc: "Setting preview to true skips integration tests and creates a self-hosted preview for you to consume"
-  required: false
-  default: true
-- name: channel
-  desc: "Replicated channel to use, default is unstable"
-  required: false
-  default: ""
-- name: version
-  desc: "Version of gitpod to install, default is latest (in the case of upgrade tests, this is the initial install version and will later get upgraded to latest)"
-  required: false
-  default: ""
-- name: upgrade
-  desc: "Set this to true to run upgrade test from the specified version to the latest version"
-  required: false
-  default: false
 pod:
   serviceAccount: werft
   affinity:
