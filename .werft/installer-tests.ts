@@ -185,15 +185,53 @@ const INFRA_PHASES: { [name: string]: InfraConfig } = {
     },
 };
 
-
 const TESTS: { [name: string]: InfraConfig } = {
-    // TODO(nvn): make this more atomic
-    INTEGRATION_TESTS: {
-        phase: "run-tests",
-        makeTarget: "run-tests",
-        description: "Run the integration tests",
+    WORKSPACE_TEST: {
+        phase: "run-workspace-tests",
+        makeTarget: "run-workspace-tests",
+        description: "workspaces tests",
     },
-}
+    VSCODE_IDE_TEST: {
+        phase: "run-vscode-ide-tests",
+        makeTarget: "run-vscode-ide-tests",
+        description: "vscode IDE test",
+    },
+    JB_IDE_TEST: {
+        phase: "run-jb-ide-tests",
+        makeTarget: "run-jb-ide-tests",
+        description: "jetbrains IDE tests",
+    },
+    CONTENTSERVICE_TEST: {
+        phase: "run-cs-component-tests",
+        makeTarget: "run-cs-component-tests",
+        description: "content-service tests",
+    },
+    DB_TEST: {
+        phase: "run-db-component-tests",
+        makeTarget: "run-db-component-tests",
+        description: "database tests",
+    },
+    IMAGEBUILDER_TEST: {
+        phase: "run-ib-component-tests",
+        makeTarget: "run-ib-component-tests",
+        description: "image-builder tests",
+    },
+    SERVER_TEST: {
+        phase: "run-server-component-tests",
+        makeTarget: "run-server-component-tests",
+        description: "server tests",
+    },
+    WS_DAEMON_TEST: {
+        phase: "run-wsd-component-tests",
+        makeTarget: "run-wsd-component-tests",
+        description: "ws-daemon tests",
+    },
+    WS_MNGR_TEST: {
+        phase: "run-wsm-component-tests",
+        makeTarget: "run-wsm-component-tests",
+        description: "ws-manager tests",
+    },
+};
 
 if (config === undefined) {
     console.log(`Unknown configuration specified: "${testConfig}", Exiting...`);
