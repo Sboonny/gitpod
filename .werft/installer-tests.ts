@@ -282,7 +282,7 @@ function cleanup() {
     werft.phase(phase, "Destroying all the created resources");
 
     const response = exec(`make -C ${makefilePath} cleanup cloud=${cloud}`, {
-        slice: "run-terrafrom-destroy",
+        slice: "run-terraform-destroy",
         dontCheckRc: true,
     });
 
