@@ -378,7 +378,7 @@ func installWorkspacePortRoutes(r *mux.Router, config *RouteHandlerConfig, infoP
 				}
 			}
 			r.Header.Add("X-Forwarded-Proto", "https")
-			r.Header.Add("X-Forwarded-Host", r.Host+":443")
+			r.Header.Add("X-Forwarded-Host", r.Host)
 			proxyPass(
 				config,
 				infoProvider,
